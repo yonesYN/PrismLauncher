@@ -134,21 +134,12 @@ LaunchDecision LaunchController::decideLaunchMode()
         return LaunchDecision::Continue;
     }
 
-    const auto* accounts = APPLICATION->accounts();
-    MinecraftAccountPtr accountToCheck = nullptr;
-
-    if (m_accountToUse->accountType() != AccountType::Offline) {
-        accountToCheck = m_accountToUse->ownsMinecraft() ? m_accountToUse : nullptr;
-    } else if (const auto defaultAccount = accounts->defaultAccount(); defaultAccount && defaultAccount->ownsMinecraft()) {
-        accountToCheck = defaultAccount;
-    } else {
-        for (int i = 0; i < accounts->count(); i++) {
-            if (const auto account = accounts->at(i); account->ownsMinecraft()) {
-                accountToCheck = account;
-                break;
-            }
-        }
+    if (m_accountToUse->accountType() == AccountType::Offline) {
+        m_actualLaunchMode = LaunchMode::Offline;
+        return LaunchDecision::Continue;
     }
+
+    MinecraftAccountPtr accountToCheck = m_accountToUse->ownsMinecraft() ? m_accountToUse : nullptr;
 
     if (!accountToCheck) {
         m_actualLaunchMode = LaunchMode::Demo;
@@ -196,8 +187,7 @@ LaunchDecision LaunchController::decideLaunchMode()
             reauthReason = tr("'%1' no longer exists on the servers").arg(accountToCheck->profileName());
             break;
         default:
-            m_actualLaunchMode =
-                state == AccountState::Online && m_wantedLaunchMode == LaunchMode::Normal ? LaunchMode::Normal : LaunchMode::Offline;
+            m_actualLaunchMode = LaunchMode::Offline;
             return LaunchDecision::Continue;  // All good to go
     }
 
@@ -392,18 +382,8 @@ void LaunchController::launchInstance()
     connect(m_launcher, &LaunchTask::failed, this, &LaunchController::onFailed);
     connect(m_launcher, &LaunchTask::requestProgress, this, &LaunchController::onProgressRequested);
 
-    // Prepend Online and Auth Status
     QString online_mode;
-    if (m_actualLaunchMode == LaunchMode::Normal) {
-        online_mode = "online";
-
-        // Prepend Server Status
-        const QStringList servers = { "login.microsoftonline.com", "session.minecraft.net", "textures.minecraft.net", "api.mojang.com" };
-
-        m_launcher->prependStep(makeShared<PrintServers>(m_launcher, servers));
-    } else {
-        online_mode = m_actualLaunchMode == LaunchMode::Demo ? "demo" : "offline";
-    }
+    online_mode = "offline";
 
     m_launcher->prependStep(makeShared<TextPrint>(m_launcher, "Launched instance in " + online_mode + " mode\n", MessageLevel::Launcher));
 
